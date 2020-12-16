@@ -1,0 +1,71 @@
+
+=begin
+--------------------------------------------------------------------------------
+ Title : empty
+ Date : 12/16/2020
+ Author : Randsford
+
+ Use :
+  ;group2 <roomid>
+
+ Details : Uses lootsack and lootsack2 variables (defined in sloot)
+ and empties any boxes found to the ground.
+
+ Updates :
+  - 12/16/2020 Released
+--------------------------------------------------------------------------------
+=end
+
+
+def msg(str)
+  echo str
+end
+
+# Waits until your disk is present or a timeout occurs
+def check_for_disk()
+    disk = nil
+    notified = false
+    25.times {
+      break if disk = GameObj[/^.*#{Char.name} (?:disk|coffin)$/]
+      sleep 0.2
+      unless notified
+        msg("-- waiting on your disk to arrive")
+        notified = true
+      end
+    }
+    disk
+end
+
+#find container
+def findContainer(uservar)
+	container = GameObj.inv.find{ |container| container.name =~ /.*#{uservar}.*/ }
+end
+
+#empty container of boxes
+def emptyContainer(container)
+  fput "look in #{container}"
+  boxes = container.contents.select{ |item| 
+  item.type == "box"
+  }
+  
+  for box in boxes do
+      fput "take ##{box.id}"
+      fput "drop ##{box.id}"
+      sleep 0.1
+	end
+end
+
+# main loop to add target
+def main()
+  disk = check_for_disk()
+  if(!disk.nil?)
+    emptyContainer(disk)
+  end
+  lootsack = findContainer(UserVars.lootsack)
+  emptyContainer(lootsack)
+  lootsack2 = findContainer(UserVars.lootsack2)
+  emptyContainer(lootsack2)
+end
+
+ # Start code in main()
+main()

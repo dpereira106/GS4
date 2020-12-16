@@ -1,0 +1,230 @@
+
+=begin
+--------------------------------------------------------------------------------
+ Title : empty
+ Date : 12/16/2020
+ Author : Randsford
+
+ Use :
+  ;group2 <roomid>
+
+ Details : run setup to set your leash target
+
+ Updates :
+  - 12/16/2020 Released
+--------------------------------------------------------------------------------
+=end
+
+silence_me
+
+#create settings array 
+settings = CharSettings.to_hash
+
+msg = proc { |str|
+    echo str
+}
+
+setup = proc {
+    gtk_globals = Hash.new
+    gtk_locals = Hash.new
+  
+    window = window_action = nil
+  
+    Gtk.queue {
+      gtk_globals["leashTarget"] = Gtk::Entry.new.set_text(UserVars.leashTarget)
+
+      # Primary Window
+      window = Gtk::Window.new
+      window.title = "Leash configuration for #{Char.name}"
+      window.border_width = 3
+      window.resizable = false
+      window.resize(450, 300)
+  
+      # Notebooks for tabs at the top
+      nb = Gtk::Notebook.new.set_show_border(true).set_tab_border(3)
+  
+      #
+      # Notebook Page 1 - Leash Target
+      #
+      vb_pg1 = Gtk::VBox.new(false, 1).set_border_width(3)
+  
+      #
+      # Page 1, Frame 1 - Leash Target
+      #
+      vb_pg1_1 = Gtk::VBox.new(false, 1).set_border_width(3)
+      fr_pg1_1 = Gtk::Frame.new.set_border_width(5).set_label_widget(Gtk::Label.new.set_markup("<big><b>Leash</b></big>"))
+      fr_pg1_1.add(vb_pg1_1)
+      vb_pg1.pack_start(fr_pg1_1, false)
+  
+      lbl = Gtk::Label.new.set_markup("Set the target for your leash.  As long as the target's group is open they will be added to your group.")
+      lbl.set_wrap(true).set_width_request(500).set_padding(0, 10)
+      vb_pg1_1.pack_start(lbl, false)
+  
+      hb = Gtk::HBox.new(false, 1)
+      hb.pack_start(Gtk::Alignment.new(1, 0, 0, 1).add(Gtk::Label.new("Leash Target:")).set_width_request(100))
+      hb.pack_start(gtk_globals["leashTarget"], false)
+      vb_pg1_1.pack_start(hb, false)
+  
+  
+      #
+      # Page 1, Frame 3 - Advanced Options
+      #
+      nb.append_page(vb_pg1, Gtk::Label.new("Leash"))
+  
+      # Save/Close buttons
+      hb_saveclose = Gtk::HBox.new
+      save = Gtk::Button.new("_Save & Close")
+      close = Gtk::Button.new("E_xit")
+  
+      save.signal_connect("clicked") { window_action = :save }
+      close.signal_connect("clicked") { window_action = :done }
+  
+      hb_saveclose.pack_start(save, false)
+      hb_saveclose.pack_start(close, false)
+  
+      # Primary VerticalBox to split up Notebook and Save/Close buttons
+      vb_main = Gtk::VBox.new(false, 5)
+      vb_main.border_width = 3
+  
+      vb_main.pack_start(nb, false)
+      vb_main.pack_start(Gtk::Alignment.new(1, 0, 0, 0).add(hb_saveclose), false)
+  
+      window.signal_connect("delete_event") { window_action = :exit }
+  
+      window.add(vb_main)
+      window.show_all
+      window.keep_above = true # On windows keep_above is required AFTER show_all
+    }
+  
+    before_dying { Gtk.queue { window.destroy } }
+    wait_while { window_action.nil? }
+  
+    clean_entry = proc { |entry|
+      entry.text = entry.text.strip
+      if entry.text.empty?
+        entry.text = nil
+      end
+  
+      entry.text
+    }
+  
+    if window_action == :save
+      gtk_globals.each_pair { |option, widget|
+        if widget.class == Gtk::CheckButton
+          UserVars.change(option, widget.active?, :char)
+        elsif widget.class == Gtk::Entry
+          UserVars.change(option, clean_entry.call(widget), :char)
+        else
+          echo "error: unknown global widget #{option} [#{widget.class}]"
+        end
+      }
+  
+      gtk_locals.each_pair { |option, widget|
+        if widget.class == Gtk::CheckButton
+          settings[option] = widget.active?
+        elsif widget.class == Gtk::Entry
+          settings[option] = clean_entry.call(widget)
+        else
+          echo "error: unknown local widget #{option} [#{widget.class}]"
+        end
+      }
+  
+      echo "settings saved"
+    else
+      echo "closed without saving"
+    end
+    exit
+}
+
+silence = proc {
+	action = proc { |server_string|
+		if server_string.strip.length == 0
+			nil
+			next
+		end
+		if server_string =~ /You are not currently in a group|Your group status is currently|for a list of other options|is following you|is also a member of your group|is the leader of your group|Name: (?:.*) Race: (?:.*) Profession: (?:.*)|Gender: (?:.*) Age: (?:.*) Expr: (?:.*) Level: (?:.*)|Normal \(Bonus\)  ...  Enhanced \(Bonus\)|Strength \(STR\):|Constitution \(CON\):|Dexterity \(DEX\):|Agility \(AGI\):|Discipline \(DIS\):|Aura \(AUR\):|Logic \(LOG\):|Intuition \(INT\):|Wisdom \(WIS\):|Influence \(INF\):|Mana: (?:.*) Silver: (?:.*)|What were you referring to?|I could not find what you were referring to.|is already a member of your group!/
+			nil
+		else
+			server_string
+		end
+	}
+	DownstreamHook.add("#{script.name}_silence", action)
+}
+
+before_dying { 
+	DownstreamHook.remove("#{script.name}_silence")
+}
+
+def groupcheck()
+	group_members = Array[]
+	# group_members.push("#{Char.name}")
+	fput "GROUP"
+	line = get
+	until line =~ /for a list of other options./
+		if line =~ /^(.*) is the leader of your group./
+			group_members.push($1)
+		elsif line =~ /^(.*) is following you./
+			group_members.push($1)
+		elsif line =~ /^(.*) is also a member of your group./
+			group_members.push($1)
+		end
+		line = get
+	end
+	return group_members
+end
+
+
+
+# start of script logic
+if script.vars[1] =~ /^reset-gui$/i
+settings["window_height"] = nil
+settings["window_width"] = nil
+settings["window_position"] = nil
+echo "gui reset"
+
+elsif script.vars[1] =~ /^setup$/i
+setup.call
+
+elsif script.vars[1] =~ /^(?:help|\?)$/
+msg.call(sprintf("Leash"))
+msg.call(sprintf("%17s: Randsford", "Author"))
+msg.call(sprintf("%17s: Reign in that wild berzerking warrior, yeah you know the one...", "Description"))
+msg.call(sprintf("%17s: ;leash setup", "Usage"))
+msg.call(sprintf("%17s: ;leash <target>", "Usage"))
+respond
+end
+
+# main loop to add target
+loop{
+    if (!checkstunned && !webbed? && !checkdead)
+        if(UserVars.leashTarget.nil?)
+            msg.call("warning: leash target not yet set, please run ;leash setup")
+            DownstreamHook.remove("#{script.name}_silence")
+            exit
+        end
+
+        silence.call
+        group_members = groupcheck()
+
+        if !(group_members.include? UserVars.leashTarget)
+            waitrt?
+            fput "hold #{UserVars.leashTarget}"
+
+            line = get
+            until line =~ /You reach out and hold #{UserVars.leashTarget}'s hand|But #{UserVars.leashTarget} is already a member of your group!./
+                if line =~ /^(.*) pulls his hand away from you./
+                    DownstreamHook.remove("#{script.name}_silence")
+                    exit
+                end
+                line = get
+                pause 1
+                waitrt?
+                fput "hold #{UserVars.leashTarget}"
+                
+            end
+            pause 1
+        end
+    end
+    pause 1
+    }
+    
