@@ -1,0 +1,18 @@
+loop{
+
+if(checkstunned && !checkdead)
+	waitcastrt?
+	if Spell[605].known?
+		wait_until{ checkmana >= 5 }
+		waitrt?
+		waitcastrt?
+		fput "commune 605"
+	else
+		echo "You don't know 605!"
+		exit
+	end
+	pause 0.5
+end
+pause 0.5
+}
+
